@@ -1,0 +1,90 @@
+{
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "threads": 4,
+    "use_ssl": false,
+    "ssl_cert": "",
+    "ssl_key": "",
+    "max_connections": 1000,
+    "connection_timeout": 30
+  },
+  "cors": {
+    "allowed_origins": [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:8080"
+    ],
+    "allowed_methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "PATCH",
+      "OPTIONS"
+    ],
+    "allowed_headers": [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "X-Room-ID"
+    ],
+    "allow_credentials": true,
+    "max_age": 86400
+  },
+  "jwt": {
+    "secret": "${JWT_SECRET}",
+    "issuer": "vidor-backend",
+    "audience": "vidor-client",
+    "expiry_seconds": 3600,
+    "algorithm": "HS256"
+  },
+  "voice": {
+    "api_key": "${QWEN_API_KEY}",
+    "api_url": "https://dashscope.aliyuncs.com/api/v1/services/audio/transcription",
+    "model": "paraformer-realtime-v2",
+    "tts_model": "speech-synthesis-v2",
+    "sample_rate": 16000,
+    "chunk_duration_ms": 100,
+    "language": "en",
+    "noise_suppression": true,
+    "echo_cancellation": true
+  },
+  "turn": {
+    "server": "${TURN_SERVER}",
+    "username": "vidor",
+    "password": "${TURN_PASSWORD}",
+    "ice_servers": [
+      "stun:stun.l.google.com:19302",
+      "stun:stun1.l.google.com:19302"
+    ]
+  },
+  "logging": {
+    "level": "info",
+    "file": "logs/vidor-server.log",
+    "console": true,
+    "file_rotation": true,
+    "max_file_size_mb": 100,
+    "max_files": 5
+  },
+  "database": {
+    "url": "${DATABASE_URL}",
+    "host": "localhost",
+    "port": 5432,
+    "database": "vidor",
+    "username": "vidor",
+    "password": "${POSTGRES_PASSWORD}",
+    "max_connections": 10,
+    "connection_timeout": 30
+  },
+  "rate_limit": {
+    "enabled": true,
+    "requests_per_minute": 60,
+    "burst": 10,
+    "endpoint_limits": {
+      "/api/rooms": 30,
+      "/api/voice/transcribe": 10,
+      "/api/voice/synthesize": 10
+    }
+  }
+}

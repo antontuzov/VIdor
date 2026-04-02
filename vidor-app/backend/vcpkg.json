@@ -1,0 +1,16 @@
+{
+  "name": "vidor-backend",
+  "version": "1.0.0",
+  "dependencies": [
+    "drogon",
+    "nlohmann-json",
+    "jwt-cpp",
+    "openssl"
+  ],
+  "overrides": [
+    { "name": "drogon", "version": "1.9.8" },
+    { "name": "nlohmann-json", "version": "3.11.3" },
+    { "name": "jwt-cpp", "version": "0.7.0" }
+  ],
+  "vcpkg": "3.11.3"
+}

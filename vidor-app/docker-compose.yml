@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # Backend C++ server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vidor-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-default_secret_change_me}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - TURN_SERVER=${TURN_SERVER:-turn:coturn:3478}
+      - TURN_PASSWORD=${TURN_PASSWORD:-turn_password}
+    volumes:
+      - ./backend/config.json:/app/config.json
+      - backend_logs:/app/logs
+    networks:
+      - vidor-network
+    depends_on:
+      - postgres
+      - coturn
+    restart: unless-stopped
+
+  # Frontend React app
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://localhost:8080}
+        - VITE_TURN_SERVER=${VITE_TURN_SERVER:-turn:localhost:3478}
+    container_name: vidor-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://localhost:8080}
+      - VITE_TURN_SERVER=${VITE_TURN_SERVER:-turn:localhost:3478}
+    networks:
+      - vidor-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: vidor-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=vidor
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vidor_password}
+      - POSTGRES_DB=vidor
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - vidor-network
+    restart: unless-stopped
+
+  # Coturn TURN/STUN server
+  coturn:
+    image: coturn/coturn:latest
+    container_name: vidor-coturn
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+      - "10000-10200:10000-10200/udp"
+    environment:
+      - TURN_USERNAME=${TURN_USERNAME:-vidor}
+      - TURN_PASSWORD=${TURN_PASSWORD:-turn_password}
+      - REALM=vidor
+      - LISTENING_PORT=3478
+    volumes:
+      - ./coturn/turnserver.conf:/etc/turnserver.conf:ro
+    networks:
+      - vidor-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  backend_logs:
+
+networks:
+  vidor-network:
+    driver: bridge
