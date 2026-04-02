@@ -21,7 +21,6 @@ include(FetchContent)
 FetchContent_Declare(
     json
     URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
-    URL_HASH SHA256=382a9d6f3d7017a7e6d2d5e9e7e5e5f5c5d5e5f5c5d5e5f5c5d5e5f5c5d5e5f5
 )
 FetchContent_MakeAvailable(json)
 
@@ -29,7 +28,6 @@ FetchContent_MakeAvailable(json)
 FetchContent_Declare(
     jwt-cpp
     URL https://github.com/Thalhammer/jwt-cpp/archive/refs/tags/v0.7.0.tar.gz
-    URL_HASH SHA256=382a9d6f3d7017a7e6d2d5e9e7e5e5f5c5d5e5f5c5d5e5f5c5d5e5f5c5d5e5f5
 )
 FetchContent_MakeAvailable(jwt-cpp)
 

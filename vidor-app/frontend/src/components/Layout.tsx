@@ -1,10 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { useTheme } from '../contexts/ThemeContext'
 import ThemeToggle from './ThemeToggle'
 
 export default function Layout() {
   const location = useLocation()
-  const { theme } = useTheme()
   
   const isHomePage = location.pathname === '/'
   

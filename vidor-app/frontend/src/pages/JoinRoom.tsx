@@ -1,10 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useWebRTCStore } from '../stores/webrtcStore'
-import { signalingService } from '../services/signalingService'
+import { useConferenceRoom } from '../hooks/useConferenceRoom'
+import { useVoiceTranscription } from '../hooks/useVoiceTranscription'
 import VideoGrid from '../components/VideoGrid'
 import ControlBar from '../components/ControlBar'
 import ChatPanel from '../components/ChatPanel'
+import TranscriptionPanel from '../components/TranscriptionPanel'
+import ConnectionStatus from '../components/ConnectionStatus'
+
+type PanelType = 'chat' | 'transcription' | null
 
 export default function JoinRoom() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -12,143 +16,88 @@ export default function JoinRoom() {
   
   const [localName, setLocalName] = useState('')
   const [joined, setJoined] = useState(false)
-  const [showChat, setShowChat] = useState(false)
+  const [activePanel, setActivePanel] = useState<PanelType>(null)
   
   const {
-    localStream,
-    setLocalStream,
-    setLocalParticipantId,
-    setRoomId,
-    setIsConnected,
-    addParticipant,
-    removeParticipant,
-    cleanup,
-    error,
-    setError,
-  } = useWebRTCStore()
+    isConnected,
+    isConnecting,
+    localAudioEnabled,
+    localVideoEnabled,
+    participants,
+    joinRoom,
+    leaveRoom,
+    toggleAudio,
+    toggleVideo,
+    toggleScreenShare,
+  } = useConferenceRoom({
+    autoJoin: false,
+    autoMedia: false,
+  })
+
+  // Voice transcription
+  const {
+    isRecording,
+    transcriptHistory,
+    toggleRecording,
+  } = useVoiceTranscription({
+    language: 'en',
+    autoStart: false,
+  })
   
   const videoRef = useRef<HTMLVideoElement>(null)
   
-  // Initialize local media
-  const initMedia = async () => {
+  // Initialize local media for preview
+  const initPreview = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720 },
         audio: { echoCancellation: true, noiseSuppression: true },
       })
       
-      setLocalStream(stream)
-      
       if (videoRef.current) {
         videoRef.current.srcObject = stream
       }
     } catch (err) {
-      console.error('Failed to get media:', err)
-      setError('Failed to access camera/microphone')
+      console.error('Failed to get preview media:', err)
     }
   }
   
-  // Connect to signaling server
-  const connectToRoom = async () => {
-    if (!roomId || !localName) return
+  useEffect(() => {
+    initPreview()
     
-    const participantId = `user_${Date.now()}`
-    setLocalParticipantId(participantId)
-    setRoomId(roomId)
-    
-    try {
-      await signalingService.connect(roomId, participantId, localName)
-      
-      signalingService.onOpen(() => {
-        setIsConnected(true)
-        setJoined(true)
-      })
-      
-      signalingService.onMessage((message) => {
-        handleSignalingMessage(message)
-      })
-      
-      signalingService.onClose(() => {
-        setIsConnected(false)
-      })
-      
-    } catch (err) {
-      console.error('Failed to connect to room:', err)
-      setError('Failed to connect to signaling server')
+    return () => {
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream
+        stream.getTracks().forEach(track => track.stop())
+      }
     }
-  }
+  }, [])
   
-  // Handle incoming signaling messages
-  const handleSignalingMessage = async (message: any) => {
-    console.log('Received message:', message)
-    
-    switch (message.type) {
-      case 'joined':
-        console.log('Successfully joined room')
-        break
-        
-      case 'participant-joined':
-        addParticipant({
-          id: message.participant_id,
-          name: message.name,
-          has_video: true,
-          has_audio: true,
-        })
-        // Create peer connection and send offer
-        // (simplified - full implementation in Step 3)
-        break
-        
-      case 'participant-left':
-        removeParticipant(message.participant_id)
-        break
-        
-      case 'offer':
-        // Handle incoming offer
-        break
-        
-      case 'answer':
-        // Handle incoming answer
-        break
-        
-      case 'ice-candidate':
-        // Handle ICE candidate
-        break
-        
-      case 'error':
-        setError(message.message)
-        break
-    }
-  }
-  
-  // Handle join form submission
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!roomId || !localName) return
     
-    await initMedia()
-    await connectToRoom()
+    try {
+      await joinRoom(roomId, localName)
+      setJoined(true)
+    } catch (err) {
+      console.error('Failed to join:', err)
+    }
   }
   
-  // Cleanup on unmount
+  const handleLeave = () => {
+    leaveRoom()
+    navigate('/')
+  }
+
   useEffect(() => {
+    document.title = joined ? `${roomId} - Vidor` : 'Join Meeting - Vidor'
     return () => {
-      if (joined && roomId) {
-        const participantId = `user_${Date.now()}`
-        signalingService.leave(roomId, participantId)
-      }
-      cleanup()
+      document.title = 'Vidor'
     }
-  }, [])
+  }, [joined, roomId])
   
-  // Update local video when stream changes
-  useEffect(() => {
-    if (videoRef.current && localStream) {
-      videoRef.current.srcObject = localStream
-    }
-  }, [localStream])
-  
-  // Show join form if not joined
   if (!joined) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-4">
@@ -161,7 +110,22 @@ export default function JoinRoom() {
                 </svg>
               </div>
               <h1 className="text-2xl font-bold text-text mb-2">Join Meeting</h1>
-              <p className="text-text-muted">Room: {roomId}</p>
+              <p className="text-text-muted">Room: <span className="font-mono">{roomId}</span></p>
+            </div>
+            
+            <div className="mb-6">
+              <div className="video-container aspect-video">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover transform scale-x-[-1]"
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/50 backdrop-blur-sm rounded text-white text-sm">
+                  Preview
+                </div>
+              </div>
             </div>
             
             <form onSubmit={handleJoin} className="space-y-4">
@@ -181,14 +145,22 @@ export default function JoinRoom() {
                 />
               </div>
               
-              {error && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-                  {error}
-                </div>
-              )}
-              
-              <button type="submit" className="btn btn-primary w-full">
-                Join Meeting
+              <button 
+                type="submit" 
+                className="btn btn-primary w-full"
+                disabled={isConnecting || !localName.trim()}
+              >
+                {isConnecting ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Connecting...
+                  </span>
+                ) : (
+                  'Join Meeting'
+                )}
               </button>
               
               <button
@@ -205,29 +177,67 @@ export default function JoinRoom() {
     )
   }
   
-  // Show conference UI
   return (
     <div className="h-screen bg-bg-darker flex flex-col">
-      {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Video grid */}
         <div className="flex-1 p-4 overflow-auto">
           <VideoGrid />
+          
+          {participants.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center">
+                <div className="w-20 h-20 rounded-full bg-bg-darker flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-10 h-10 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <p className="text-text-muted">Waiting for others to join...</p>
+              </div>
+            </div>
+          )}
         </div>
         
-        {/* Chat panel */}
-        {showChat && (
-          <div className="w-80 border-l border-border bg-bg">
+        {/* Side panel */}
+        {activePanel === 'chat' && (
+          <div className="w-80 border-l border-border bg-bg flex-shrink-0">
             <ChatPanel />
+          </div>
+        )}
+        
+        {activePanel === 'transcription' && (
+          <div className="w-80 border-l border-border bg-bg flex-shrink-0">
+            <TranscriptionPanel
+              transcriptions={transcriptHistory}
+              isRecording={isRecording}
+              onToggleRecording={toggleRecording}
+            />
           </div>
         )}
       </div>
       
       {/* Control bar */}
       <ControlBar 
-        onToggleChat={() => setShowChat(!showChat)}
-        onLeave={() => navigate('/')}
+        isConnected={isConnected}
+        isConnecting={isConnecting}
+        localAudioEnabled={localAudioEnabled}
+        localVideoEnabled={localVideoEnabled}
+        onToggleAudio={toggleAudio}
+        onToggleVideo={toggleVideo}
+        onToggleScreenShare={toggleScreenShare}
+        onToggleChat={() => setActivePanel(activePanel === 'chat' ? null : 'chat')}
+        onToggleTranscription={() => setActivePanel(activePanel === 'transcription' ? null : 'transcription')}
+        onLeave={handleLeave}
       />
+      
+      {/* Connection status overlay */}
+      {!isConnected && isConnecting && (
+        <ConnectionStatus status="connecting" />
+      )}
+      
+      {!isConnected && !isConnecting && (
+        <ConnectionStatus status="disconnected" />
+      )}
     </div>
   )
 }

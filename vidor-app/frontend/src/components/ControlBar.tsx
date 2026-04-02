@@ -1,50 +1,62 @@
 import { useState } from 'react'
-import { useWebRTCStore } from '../stores/webrtcStore'
 
 interface ControlBarProps {
+  isConnected: boolean
+  isConnecting: boolean
+  localAudioEnabled: boolean
+  localVideoEnabled: boolean
+  onToggleAudio: () => void
+  onToggleVideo: () => void
+  onToggleScreenShare: () => Promise<void>
   onToggleChat: () => void
+  onToggleTranscription: () => void
   onLeave: () => void
 }
 
-export default function ControlBar({ onToggleChat, onLeave }: ControlBarProps) {
-  const {
-    localStream,
-    toggleAudio,
-    toggleVideo,
-    toggleScreenShare,
-  } = useWebRTCStore()
-  
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true)
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true)
+export default function ControlBar({
+  isConnected,
+  isConnecting,
+  localAudioEnabled,
+  localVideoEnabled,
+  onToggleAudio,
+  onToggleVideo,
+  onToggleScreenShare,
+  onToggleChat,
+  onToggleTranscription,
+  onLeave,
+}: ControlBarProps) {
   const [isScreenSharing, setIsScreenSharing] = useState(false)
-  
-  const handleAudioToggle = () => {
-    toggleAudio()
-    setIsAudioEnabled(!isAudioEnabled)
-  }
-  
-  const handleVideoToggle = () => {
-    toggleVideo()
-    setIsVideoEnabled(!isVideoEnabled)
-  }
+  const [isTranscribing, setIsTranscribing] = useState(false)
   
   const handleScreenShare = async () => {
-    await toggleScreenShare()
-    setIsScreenSharing(!isScreenSharing)
+    try {
+      await onToggleScreenShare()
+      setIsScreenSharing(!isScreenSharing)
+    } catch (err) {
+      console.error('Screen share failed:', err)
+    }
+  }
+  
+  const handleTranscription = () => {
+    setIsTranscribing(!isTranscribing)
+    onToggleTranscription()
   }
   
   return (
-    <div className="h-20 bg-bg border-t border-border flex items-center justify-center px-4">
+    <div className="h-20 bg-bg-primary border-t border-border-primary flex items-center justify-center px-4">
       <div className="flex items-center space-x-3">
         {/* Audio toggle */}
         <button
-          onClick={handleAudioToggle}
+          onClick={onToggleAudio}
+          disabled={!isConnected || isConnecting}
           className={`control-btn ${
-            isAudioEnabled ? 'control-btn-inactive' : 'control-btn-active bg-red-500'
-          }`}
-          title={isAudioEnabled ? 'Mute' : 'Unmute'}
+            !localAudioEnabled 
+              ? 'control-btn-active bg-red-500 hover:bg-red-600' 
+              : 'control-btn-inactive'
+          } ${!isConnected || isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={localAudioEnabled ? 'Mute' : 'Unmute'}
         >
-          {isAudioEnabled ? (
+          {localAudioEnabled ? (
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
@@ -58,13 +70,16 @@ export default function ControlBar({ onToggleChat, onLeave }: ControlBarProps) {
         
         {/* Video toggle */}
         <button
-          onClick={handleVideoToggle}
+          onClick={onToggleVideo}
+          disabled={!isConnected || isConnecting}
           className={`control-btn ${
-            isVideoEnabled ? 'control-btn-inactive' : 'control-btn-active bg-red-500'
-          }`}
-          title={isVideoEnabled ? 'Stop video' : 'Start video'}
+            !localVideoEnabled 
+              ? 'control-btn-active bg-red-500 hover:bg-red-600' 
+              : 'control-btn-inactive'
+          } ${!isConnected || isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={localVideoEnabled ? 'Stop video' : 'Start video'}
         >
-          {isVideoEnabled ? (
+          {localVideoEnabled ? (
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
@@ -78,9 +93,12 @@ export default function ControlBar({ onToggleChat, onLeave }: ControlBarProps) {
         {/* Screen share */}
         <button
           onClick={handleScreenShare}
+          disabled={!isConnected || isConnecting}
           className={`control-btn ${
-            isScreenSharing ? 'control-btn-active' : 'control-btn-inactive'
-          }`}
+            isScreenSharing 
+              ? 'control-btn-active' 
+              : 'control-btn-inactive'
+          } ${!isConnected || isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
           title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -89,12 +107,15 @@ export default function ControlBar({ onToggleChat, onLeave }: ControlBarProps) {
         </button>
         
         {/* Divider */}
-        <div className="w-px h-8 bg-border mx-2" />
+        <div className="w-px h-8 bg-border-primary mx-2" />
         
         {/* Chat */}
         <button
           onClick={onToggleChat}
-          className="control-btn control-btn-inactive"
+          disabled={!isConnected || isConnecting}
+          className={`control-btn control-btn-inactive ${
+            !isConnected || isConnecting ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
           title="Toggle chat"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -102,10 +123,28 @@ export default function ControlBar({ onToggleChat, onLeave }: ControlBarProps) {
           </svg>
         </button>
         
+        {/* Transcription */}
+        <button
+          onClick={handleTranscription}
+          disabled={!isConnected || isConnecting}
+          className={`control-btn ${
+            isTranscribing
+              ? 'control-btn-active'
+              : 'control-btn-inactive'
+          } ${!isConnected || isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title="Toggle transcription"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </button>
+        
         {/* Settings */}
         <a
           href="/settings"
-          className="control-btn control-btn-inactive"
+          className={`control-btn control-btn-inactive ${
+            !isConnected || isConnecting ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
           title="Settings"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -115,18 +154,32 @@ export default function ControlBar({ onToggleChat, onLeave }: ControlBarProps) {
         </a>
         
         {/* Divider */}
-        <div className="w-px h-8 bg-border mx-2" />
+        <div className="w-px h-8 bg-border-primary mx-2" />
         
         {/* Leave button */}
         <button
           onClick={onLeave}
-          className="control-btn bg-red-500 hover:bg-red-600 text-white"
+          className="control-btn control-btn-danger"
           title="Leave meeting"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
         </button>
+      </div>
+      
+      {/* Connection indicator */}
+      <div className="absolute right-4 flex items-center space-x-2">
+        <div className={`w-2 h-2 rounded-full ${
+          isConnected 
+            ? 'bg-green-500 animate-pulse' 
+            : isConnecting 
+            ? 'bg-yellow-500 animate-pulse' 
+            : 'bg-red-500'
+        }`} />
+        <span className="text-xs text-text-secondary">
+          {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
+        </span>
       </div>
     </div>
   )

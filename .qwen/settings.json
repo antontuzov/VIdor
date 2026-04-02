@@ -3,7 +3,15 @@
     "allow": [
       "Bash(mkdir *)",
       "Bash(npm create *)",
-      "Bash(chmod *)"
+      "Bash(chmod *)",
+      "Bash(npm install)",
+      "Bash(npx *)",
+      "Bash(rm *)",
+      "Bash(npm run *)",
+      "Bash(sleep *)",
+      "Bash(curl *)",
+      "Bash(cmake *)",
+      "Bash(docker *)"
     ]
   },
   "$version": 3
